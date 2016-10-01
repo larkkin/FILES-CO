@@ -1,0 +1,8 @@
+	.text
+	.global entry_table
+	.extern c_handler
+entry0:
+	jmp common
+
+common:
+	iretq
