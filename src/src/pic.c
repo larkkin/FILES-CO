@@ -1,5 +1,5 @@
-#define SLAVE 0x20 //command ports
-#define MASTER 0xA0//command ports
+#define SLAVE 0xA0 //command ports
+#define MASTER 0x20//command ports
 #define INIT 0x10 // 4th bit is 1
 #define IC4 0x01 // zero bit
 #define ICW4_8086 0x01
