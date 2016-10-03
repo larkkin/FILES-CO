@@ -33,14 +33,18 @@ struct frame
 	uint64_t rbx;
 	uint64_t rax;
 	uint64_t intno;
-	uint64_t rsp;
 	uint64_t error;
+	//uint64_t rsp;
 }__attribute__((packed));
 
-char* nums[32] = {"0", "1", "2", "3", "4", "5", "6", "7", "8",
-				 "9", "10", "11", "12", "13", "14", "15", "16", 
-				 "17", "18", "19", "20", "21", "22", "23", "24", 
-				 "25", "26", "27", "28", "29", "30", "31"};
+char* nums[50] = {"0","1","2","3","4","5","6",
+				  "7","8","9","10","11","12", "13",
+				  "14","15","16","17","18","19","20",
+				  "21","22","23","24","25","26","27",
+				  "28","29","30","31","32","33","34",
+				  "35","36","37","38","39","40","41",
+				  "42","43","44","45","46","47","48","49"};
+
 
 
 void c_handler(struct frame* fr)
@@ -48,7 +52,22 @@ void c_handler(struct frame* fr)
 	ser_port_write_string("got interrupt ");
 	ser_port_write_string(nums[fr->intno]);
 	ser_port_write_string(" \n");
-	if (fr->intno >= 48) 
+	if (fr->intno < 48 && fr->intno >= 32) 
+	{
+		PIC_sendEOI(fr->intno);
+	}
+}
+
+
+void pit_handler(struct frame* fr)
+{
+	static uint64_t counter = 1;	
+	counter++;
+	if (counter % 10 == 0)
+	{
+		ser_port_write_string("beep\n");
+	}
+	if (fr->intno < 48) 
 	{
 		PIC_sendEOI(fr->intno);
 	}
@@ -65,10 +84,13 @@ void main(void)
     init_idt();
  	
  	ser_port_write_string("idt initialized\n");
- 	__asm__ volatile ("int $15");
+ 	__asm__ volatile ("int $1");
  	ser_port_write_string("interrupt handled\n"); // lie :(
-	__asm__ volatile ("int $0x2"); 
+	__asm__ volatile ("int $16"); 
 	ser_port_write_string("2nd interrupt handled\n");
+
+	PIC_init(40, 32);
+	init_PIT(100);
 
 	while (1);
 }

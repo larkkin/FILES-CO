@@ -41,8 +41,8 @@ void init_idt()
 {
     extern uint64_t entry_table[];
     
-    static struct desc_table_ptr ptr_idt; //we create the structure instance
-    ptr_idt.size = IDT_SIZE;//size in bytes -1
+    struct desc_table_ptr ptr_idt; //we create the structure instance
+    ptr_idt.size = IDT_SIZE*sizeof(struct InterruptDescriptor) - 1;//size in bytes -1
     ptr_idt.addr = (uint64_t) idt; //cast type as addr is 64
     write_idtr(&ptr_idt); //so we procede to taking the address 
 

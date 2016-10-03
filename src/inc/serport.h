@@ -7,6 +7,6 @@ void ser_port_init();
 
 void ser_port_write_char(char something);
 void ser_port_write_string(char* something);
-void ser_port_write_64(uint64_t something);
+//void ser_port_write_64(uint64_t something);
 
 #endif // __SERPORT_H_

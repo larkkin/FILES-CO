@@ -30,6 +30,7 @@ void ser_port_write_string (char* something)
 	}
 }
 
+/*
 void ser_port_write_64(uint64_t something) 
 {
 	while (!can_write());
@@ -38,3 +39,4 @@ void ser_port_write_64(uint64_t something)
 	out32(0x3f8, something & 0x00000000FFFFFFFF);
 	
 }
+*/

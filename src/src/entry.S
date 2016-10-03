@@ -159,7 +159,7 @@ entry39:
 entry40:
 	subq $8, %rsp
 	pushq $40
-	jmp common
+	jmp common_for_pit
 entry41:
 	subq $8, %rsp
 	pushq $41
@@ -235,6 +235,44 @@ common:
 	popq %rax
 	addq $16, %rsp
 	iretq
+
+common_for_pit:
+	pushq %rax
+	pushq %rbx
+	pushq %rcx
+	pushq %rdx
+	pushq %rbp
+	pushq %rdi
+	pushq %rsi
+	pushq %r8
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rdi
+	cld
+	call pit_handler
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %r11
+	popq %r10
+	popq %r9
+	popq %r8
+	popq %rsi
+	popq %rdi
+	popq %rbp
+	popq %rdx
+	popq %rcx
+	popq %rbx
+	popq %rax
+	addq $16, %rsp
+	iretq
+
 
 entry_table:
 	.quad entry0
