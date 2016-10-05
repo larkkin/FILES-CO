@@ -27,9 +27,9 @@ void PIC_init(uint8_t idt_index_for_slave, uint8_t idt_index_for_master) //funct
 
 void PIC_sendEOI(uint8_t interrupt_index)
 {
-	if (interrupt_index >= 40)
+	if (interrupt_index < 40)
 	{
-		out8(SLAVE, 0x20); //____|____||_________ we don;t forget both the two 
+		out8(SLAVE, 0x20); //____|____||_________ we don;t forget both the two		 
 	}
 	out8(MASTER, 0x20); //_____|____||______
 }
