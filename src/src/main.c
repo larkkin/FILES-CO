@@ -67,10 +67,8 @@ void pit_handler(struct frame* fr)
 	{
 		ser_port_write_string("beep\n");
 	}
-	if (fr->intno < 48) 
-	{
-		PIC_sendEOI(fr->intno);
-	}
+	PIC_sendEOI(fr->intno);
+	
 }
 
 
