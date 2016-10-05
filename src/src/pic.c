@@ -19,6 +19,9 @@ void PIC_init(uint8_t idt_index_for_slave, uint8_t idt_index_for_master) //funct
 
 	out8(SLAVE + 1, ICW4_8086);
 	out8(MASTER + 1, ICW4_8086);
+	
+	out8(SLAVE+1, 0xFF);
+	out8(MASTER+1, 0xFF); // mask all the interrupts 
 	enable_ints();
 }
 
@@ -26,9 +29,9 @@ void PIC_sendEOI(uint8_t interrupt_index)
 {
 	if (interrupt_index >= 40)
 	{
-		out8(MASTER, 0x20); //____|____||_________ we don;t forget both the two 
+		out8(SLAVE, 0x20); //____|____||_________ we don;t forget both the two 
 	}
-	out8(SLAVE, 0x20); //_____|____||______
+	out8(MASTER, 0x20); //_____|____||______
 }
 
 #define PIT_CMD 0x43
@@ -36,6 +39,7 @@ void PIC_sendEOI(uint8_t interrupt_index)
 
 void init_PIT(uint16_t init_value)
 {
+	out8(MASTER+1, 0xFE); // 11111110
 	uint16_t divisor = 1193180 / init_value;
 	out8(PIT_CMD, 0x34); // 00110100  -- 00 11 010 0  
 	//00 for zero channel, 11 for 2 bytes of init_value to write, 010 for 2nd working mode, 0 for BCD

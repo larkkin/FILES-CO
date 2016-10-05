@@ -90,7 +90,7 @@ void main(void)
 	ser_port_write_string("2nd interrupt handled\n");
 
 	PIC_init(32, 40);
-	init_PIT(100);
+	init_PIT(10);
 
 	while (1);
 }
