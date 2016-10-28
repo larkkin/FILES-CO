@@ -3,6 +3,7 @@
 #include <time.h>
 #include <print.h>
 #include <multiboot.h>
+#include <buddy_allocator.h>
 
 static void qemu_gdb_hang(void)
 {
@@ -51,6 +52,65 @@ void print_free_memory(multiboot_info_t* mbt)
     }
 }
 
+typedef struct longest_free_segment_type {
+    uint64_t start;
+    uint64_t end;
+} longest_free_segment_t;
+
+longest_free_segment_t find_longest_free_segment(multiboot_info_t* mbt)
+{
+    uint64_t os_start = (uint64_t) text_phys_begin;
+    uint64_t os_end = (uint64_t) bss_phys_end;
+    
+    uint64_t res_start = 0;
+    uint64_t res_end = 0;
+    uint64_t max_length = 0;
+
+    for (multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)(uint64_t) mbt->mmap_addr;
+         mmap < (multiboot_memory_map_t*) (uint64_t) (mbt->mmap_addr + mbt->mmap_length);
+         mmap = (multiboot_memory_map_t*) (uint64_t) ( (uint64_t) mmap + mmap->size + sizeof(mmap->size) ))  
+    {
+        if (mmap->type != 1)
+        {
+            continue;
+        }
+        if (mmap->addr >= os_end || mmap->addr + mmap->len <= os_start)
+        {  
+            // segment_start....segment_end.......os_start....os_end  or 
+            // os_start....os_end.......segment_start....segment_end
+            // printf("from: %lx to: %lx\n", mmap->addr, mmap->addr + mmap->len);
+            if (mmap->addr + mmap->len - mmap->addr > max_length) {
+                res_start = mmap->addr;
+                res_end = mmap->addr + mmap->len;
+                max_length = res_end - res_start;
+            }
+            continue; 
+        }
+        if (mmap->addr < os_start)
+        {
+            // segment_start....os_start
+            if (os_start - mmap->addr > max_length) {
+                res_start = mmap->addr;
+                res_end = os_start;
+                max_length = res_end - res_start;
+            }
+        }
+        if (mmap->addr + mmap->len > os_end)
+        {
+            // os_end....segment_end
+            if (mmap->addr + mmap->len - os_end > max_length) {
+                res_start = os_end;
+                res_end = mmap->addr + mmap->len;
+                max_length = res_end - res_start;
+            }
+        }
+    }
+    longest_free_segment_t res;
+    res.start = res_start;
+    res.end = res_end;
+    return res;
+}
+
 void main(uint32_t mbt_num)
 {
     qemu_gdb_hang();
@@ -89,6 +149,21 @@ void main(uint32_t mbt_num)
 
     print_free_memory(mbt);
 
+    longest_free_segment_t longest_free_segment = find_longest_free_segment(mbt);
+    init_allocator(longest_free_segment.start, longest_free_segment.end);
+
+    int* arr = (int*) b_allocate(10);
+    int* arr2 = (int*) b_allocate(3);
+    arr[1024] = 2;
+    printf("%d\n", arr[1024]);
+    printf("allocated to %lx\n", (uint64_t) arr);
+    if (b_free((page_t*) arr)) {
+        printf("yes\n");
+    }
+    if (b_free((page_t*) arr2)) {
+        printf("yes\n");
+    }
+    printf("%d\n", arr[1024]);
 
 	while (1);
 }
