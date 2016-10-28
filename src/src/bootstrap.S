@@ -228,9 +228,7 @@ start64:
 
 	cld
 	movq $0, %rdi # added lately!
-	.code32 # added lately!
 	movl %ebx, %edi # added lately!
-	.code64 # added lately!
 	movabsq $main, %rax
 	call *%rax
 

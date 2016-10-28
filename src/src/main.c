@@ -17,6 +17,8 @@ static void qemu_gdb_hang(void)
 extern char text_phys_begin[];
 extern char bss_phys_end[];
 
+
+
 void print_free_memory(multiboot_info_t* mbt)
 {
     uint64_t os_start = (uint64_t) text_phys_begin;
@@ -149,11 +151,10 @@ void main(uint32_t mbt_num)
 
     print_free_memory(mbt);
 
-    longest_free_segment_t longest_free_segment = find_longest_free_segment(mbt);
-    init_allocator(longest_free_segment.start, longest_free_segment.end);
-
-    int* arr = (int*) b_allocate(10);
-    int* arr2 = (int*) b_allocate(3);
+    // longest_free_segment_t longest_free_segment = find_longest_free_segment(mbt);
+    init_allocator(mbt);
+    int* arr = (int*) b_allocate(1600).page_ptr;
+    int* arr2 = (int*) b_allocate(3).page_ptr;
     arr[1024] = 2;
     printf("%d\n", arr[1024]);
     printf("allocated to %lx\n", (uint64_t) arr);
