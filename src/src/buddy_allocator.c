@@ -48,6 +48,7 @@ uint64_t deg_2_round_up(uint64_t num)
 
 static free_segments_array_t free_segments;
 static segments_info_array_t segments_info;
+static uint64_t global_descriptors_start;
 const uint64_t CANONICAL_OFFSET = 0xffff800000000000;
 
 typedef struct longed_page_type {
@@ -86,7 +87,7 @@ void clear_block(buddy_descriptor_t* descriptor_ptr) {
 	buddy_descriptor_t* temp_descriptor_ptr = descriptor_ptr;
 	while (temp_descriptor_ptr != descriptor_ptr + (1<<descriptor_ptr->block_order)) {
 		temp_descriptor_ptr->is_free = true;
-		clear_page((longed_page_t*) temp_descriptor_ptr->page_ptr);
+		// clear_page((longed_page_t*) temp_descriptor_ptr->page_ptr);
 		temp_descriptor_ptr++;
 	}
 }
@@ -182,9 +183,67 @@ bool b_free(page_t* page) {
 	return true;
 }
 
+free_segment_t find_longest_free_segment_in_first_4GB(multiboot_info_t* mbt)
+{
+    uint64_t os_start = (uint64_t) text_phys_begin;
+    uint64_t os_end = (uint64_t) bss_phys_end;
+    
+    uint64_t res_start = 0;
+    uint64_t res_end = 0;
+    uint64_t max_length = 0;
+
+    for (multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)(uint64_t) mbt->mmap_addr;
+         mmap < (multiboot_memory_map_t*) (uint64_t) (mbt->mmap_addr + mbt->mmap_length);
+         mmap = (multiboot_memory_map_t*) (uint64_t) ( (uint64_t) mmap + mmap->size + sizeof(mmap->size) ))  
+    {
+        if (mmap->type != 1)
+        {
+            continue;
+        }
+        if (mmap->addr + mmap->len > 0x100000000)
+        {
+            continue;
+        }
+        if (mmap->addr >= os_end || mmap->addr + mmap->len <= os_start)
+        {  
+            // segment_start....segment_end.......os_start....os_end  or 
+            // os_start....os_end.......segment_start....segment_end
+            // printf("from: %lx to: %lx\n", mmap->addr, mmap->addr + mmap->len);
+            if (mmap->addr + mmap->len - mmap->addr > max_length) {
+                res_start = mmap->addr;
+                res_end = mmap->addr + mmap->len;
+                max_length = res_end - res_start;
+            }
+            continue; 
+        }
+        if (mmap->addr < os_start)
+        {
+            // segment_start....os_start
+            if (os_start - mmap->addr > max_length) {
+                res_start = mmap->addr;
+                res_end = os_start;
+                max_length = res_end - res_start;
+            }
+        }
+        if (mmap->addr + mmap->len > os_end)
+        {
+            // os_end....segment_end
+            if (mmap->addr + mmap->len - os_end > max_length) {
+                res_start = os_end;
+                res_end = mmap->addr + mmap->len;
+                max_length = res_end - res_start;
+            }
+        }
+    }
+    free_segment_t res;
+    res.start = res_start;
+    res.end = res_end;
+    return res;
+}
+
 free_segments_array_t get_free_segments(multiboot_info_t* mbt)
 {
-	printf("----------getting free segmens----------\n");
+	printf("----------getting free segmetns---------\n");
 	free_segments_array_t res;
 	res.size = 0;
 
@@ -196,8 +255,12 @@ free_segments_array_t get_free_segments(multiboot_info_t* mbt)
          mmap = (multiboot_memory_map_t*) (uint64_t) ( (uint64_t) mmap + mmap->size + sizeof(mmap->size) ))  
     {
     	printf("\t new segment, length %lx\n", mmap->len);
-    	if (mmap->addr >= 0x80000000 || mmap->addr + mmap->len >= 0x80000000) {
-    		printf("not first 4GB or not properly aligned\n");
+    	// if (mmap->addr >= 0x100000000 || mmap->addr + mmap->len > 0x100000000 || mmap->addr % PAGE_SIZE != 0) {
+    	// 	printf("not first 4GB or not properly aligned\n");
+    	// 	continue;
+    	// }
+    	if (mmap->addr % PAGE_SIZE != 0) {
+    		printf("not properly aligned\n");
     		continue;
     	}
         if (mmap->type != 1)
@@ -207,13 +270,18 @@ free_segments_array_t get_free_segments(multiboot_info_t* mbt)
         }
         if (mmap->addr >= os_end || mmap->addr + mmap->len <= os_start)
         {
-        	printf("full segment\n");
+        	printf("full segment");
+        	if (mmap->addr == global_descriptors_start) {
+	    		printf(", reserved for descriptors\n");
+	    		continue;
+	    	}
+	    	printf("\n");
             // segment_start....segment_end.......os_start....os_end  or 
             // os_start....os_end.......segment_start....segment_end
             // printf("from: %lx to: %lx\n", mmap->addr, mmap->addr + mmap->len);
             free_segment_t next_segment;
-            next_segment.start = mmap->addr+CANONICAL_OFFSET;
-            next_segment.end = mmap->addr + mmap->len+CANONICAL_OFFSET;
+            next_segment.start = mmap->addr;
+            next_segment.end = mmap->addr + mmap->len;
             res.segments[res.size] = next_segment;
             res.size++;
             continue; 
@@ -221,12 +289,16 @@ free_segments_array_t get_free_segments(multiboot_info_t* mbt)
         if (mmap->addr < os_start)
         {
         	printf("pre-kernel segment");
+        	if (mmap->addr == global_descriptors_start) {
+	    		printf(", reserved for descriptors\n");
+	    		continue;
+	    	}
         	if (os_start - mmap->addr >= 4*PAGE_SIZE)
 	        {  
 		        printf("\n");
 	        	free_segment_t next_segment;
-	            next_segment.start = mmap->addr+CANONICAL_OFFSET;
-	            next_segment.end = os_start+CANONICAL_OFFSET;
+	            next_segment.start = mmap->addr;
+	            next_segment.end = os_start;
 	            res.segments[res.size] = next_segment;
 	            res.size++;
 	        }
@@ -237,6 +309,10 @@ free_segments_array_t get_free_segments(multiboot_info_t* mbt)
         if (mmap->addr + mmap->len > os_end)
         {
         	printf("post-kernel segment");
+        	if (os_end == global_descriptors_start) {
+	    		printf(", reserved for descriptors\n");
+	    		continue;
+	    	}
         	if (mmap->addr + mmap->len - os_end < 4*PAGE_SIZE)
 	        {
 	        	printf(", too small\n");
@@ -245,8 +321,8 @@ free_segments_array_t get_free_segments(multiboot_info_t* mbt)
 	        printf("\n");
             // os_end....segment_end
             free_segment_t next_segment;
-            next_segment.start = os_end+CANONICAL_OFFSET;
-            next_segment.end = mmap->addr + mmap->len+CANONICAL_OFFSET;
+            next_segment.start = os_end;
+            next_segment.end = mmap->addr + mmap->len;
             res.segments[res.size] = next_segment;
             res.size++;
         }
@@ -261,8 +337,15 @@ void init_allocator(multiboot_info_t* mbt) {
 	// printf("%d", deg_2_round_up(1));
 	printf("\n==================== initializing allocator =====================\n");
 
-
+	free_segment_t longest_segment = find_longest_free_segment_in_first_4GB(mbt);
+	printf("\nmemory segment from %llx to %llx is reserved for descriptors\n\n", 
+		longest_segment.start, 
+		longest_segment.end);
+	global_descriptors_start = longest_segment.start;
+	buddy_descriptor_t* current_descriptors_start = (buddy_descriptor_t*) global_descriptors_start;
 	free_segments = get_free_segments(mbt);
+	longest_segment.start += CANONICAL_OFFSET;
+	longest_segment.end += CANONICAL_OFFSET;
 	segments_info.size = free_segments.size;
 
 	for (uint8_t i = 0; i < free_segments.size; i++) {
@@ -273,26 +356,26 @@ void init_allocator(multiboot_info_t* mbt) {
 		// (1<<12)*d_num = length - d_num*sizeof(d)
 		// d_num*((1<<12) - sizeof(d)) = length
 		// d_num = length / ((1<<12) + sizeof(d))
-		uint64_t decriptors_number = length / ((PAGE_SIZE) + sizeof(buddy_descriptor_t)) - 1;
+		uint64_t descriptors_number = length / PAGE_SIZE - 1;
 		printf("\n\n\t segment %d\npages number: %d, size of descriptor: %lx\n",
 			i,  
-			decriptors_number, 
+			descriptors_number, 
 			sizeof(buddy_descriptor_t));
-		uint64_t MEMORY_START = (((start + decriptors_number*sizeof(buddy_descriptor_t))>>12) + 1)<<12;
+		uint64_t MEMORY_START = start;
 		uint64_t MEMORY_END = MEMORY_START + (((end - MEMORY_START)>>12)<<12);
-		printf("descriptor segment length in kbytes: %d\n", (decriptors_number*sizeof(buddy_descriptor_t))>>10);
+		printf("descriptor segment length in kbytes: %d\n", (descriptors_number*sizeof(buddy_descriptor_t))>>10);
 
 		printf("\nmemory segment start: %lx, end: %lx\n", MEMORY_START, MEMORY_END);
 		printf("memory segment length in Mbytes: %d\n", (MEMORY_END - MEMORY_START)>>20);
 		
-		buddy_descriptor_t* descriptor_ptr = (buddy_descriptor_t*) start;
+		buddy_descriptor_t* descriptor_ptr = current_descriptors_start;
 		segments_info.infos[i].descriptors_start = (uint64_t) descriptor_ptr;
-		segments_info.infos[i].pages_number = decriptors_number;
+		segments_info.infos[i].pages_number = descriptors_number;
 		segments_info.infos[i].pages_start = MEMORY_START;
 		page_t* page = (page_t*) MEMORY_START;
 		uint64_t page_index = 0;
 		// descriptor_ptr->prev = NULL;
-		for (uint64_t j = 0; j < decriptors_number; j++) {
+		for (uint64_t j = 0; j < descriptors_number; j++) {
 			descriptor_ptr->page_num = page_index;
 			descriptor_ptr->is_free = true;
 			descriptor_ptr->block_order = get_order(page_index, i);
@@ -307,11 +390,13 @@ void init_allocator(multiboot_info_t* mbt) {
 			page++;
 			page_index++;
 		}
+		current_descriptors_start += descriptors_number;
 		// if (i == 0) {
 		// 	printf("\n");
 		// }
 	}
-	
+	printf("\n\n-----total pages number: %d\n", 
+		(((uint64_t) current_descriptors_start)-global_descriptors_start)/sizeof(buddy_descriptor_t));
 	printf("==================== allocator  initialized =====================\n\n");
 	// descriptor_ptr->next = NULL;
 

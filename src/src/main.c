@@ -153,18 +153,17 @@ void main(uint32_t mbt_num)
 
     // longest_free_segment_t longest_free_segment = find_longest_free_segment(mbt);
     init_allocator(mbt);
-    int* arr = (int*) b_allocate(1600).page_ptr;
+    int* arr = (int*) b_allocate(1<<20).page_ptr;
     int* arr2 = (int*) b_allocate(3).page_ptr;
-    arr[1024] = 2;
-    printf("%d\n", arr[1024]);
-    printf("allocated to %lx\n", (uint64_t) arr);
+    // arr[1024] = 2;
+    // printf("%d\n", arr[1024]);
     if (b_free((page_t*) arr)) {
         printf("yes\n");
     }
     if (b_free((page_t*) arr2)) {
         printf("yes\n");
     }
-    printf("%d\n", arr[1024]);
+    // printf("%d\n", arr[1024]);
 
 	while (1);
 }
