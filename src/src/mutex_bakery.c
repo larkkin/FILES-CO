@@ -3,14 +3,21 @@
 // int select[MAX_THREAD_NUM];
 // int ticket[MAX_THREAD_NUM];
 
-int max() {
+int max(const mutex_t& mtx) {
+
 	int rc = 0;
+
 	for (int i = 0; i < MAX_THREAD_NUM; i++) {
-		if (ticket[i] > rc) {
-			rc = ticket[i];
+
+		if (mtx.ticket[i] > rc) {
+
+			rc = mtx.ticket[i];
+
 		}
+
 	}
 	return rc;
+
 }
 
 void lock(int thread_id, mutex_t& mtx) {
