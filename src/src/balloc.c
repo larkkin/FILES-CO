@@ -128,7 +128,6 @@ static void __balloc_remove_range(struct rb_tree *tree,
 uintptr_t __balloc_alloc(size_t size, uintptr_t align,
 			uintptr_t from, uintptr_t to)
 {
-	printf("here__BAlock\n");
 	b_lock();
 	struct rb_tree *tree = &free_ranges;
 	struct rb_node *link = tree->root;
