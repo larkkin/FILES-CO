@@ -3,7 +3,6 @@
 #include <string.h>
 #include <alloc.h>
 #include <debug.h>
-#include <mutex_bakery.h>
 
 
 #define WORD_SZ		sizeof(unsigned long long)
@@ -11,8 +10,6 @@
 #define MIN_POOL_OBJS	8
 #define PAGE_CACHE_BIT	0
 
-
-mutex_t mutex;
 
 struct mem_pool {
 	struct list_head ll;
@@ -147,15 +144,18 @@ static void mem_pool_destroy(struct mem_cache *cache, struct mem_pool *pool)
 
 void mem_cache_setup(struct mem_cache *cache, size_t size, size_t align)
 {
+	lock(&cache->mutex);
 	mem_cache_layout_setup(cache, size, align);
 
 	list_init(&cache->free_pools);
 	list_init(&cache->partial_pools);
 	list_init(&cache->busy_pools);
+	unlock(&cache->mutex);
 }
 
 void mem_cache_shrink(struct mem_cache *cache)
 {
+	lock(&cache->mutex);
 	struct list_head free_slabs;
 	struct list_head *head, *ptr;
 
@@ -171,10 +171,12 @@ void mem_cache_shrink(struct mem_cache *cache)
 		ptr = ptr->next;
 		mem_pool_destroy(cache, pool);
 	}
+	unlock(&cache->mutex);
 }
 
 void mem_cache_release(struct mem_cache *cache)
 {
+	lock(&cache->mutex);
 	BUG_ON(!list_empty(&cache->busy_pools));
 	BUG_ON(!list_empty(&cache->partial_pools));
 
@@ -186,6 +188,7 @@ void mem_cache_release(struct mem_cache *cache)
 		ptr = ptr->next;
 		mem_pool_destroy(cache, pool);
 	}
+	unlock(&cache->mutex);
 }
 
 static int ffs(unsigned long long bitmask)
@@ -207,9 +210,6 @@ static int ffs(unsigned long long bitmask)
 
 static void *mem_pool_alloc(struct mem_cache *cache, struct mem_pool *pool)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
 	BUG_ON(!pool->free);
 
 	const size_t words = cache->mask_words;
@@ -226,8 +226,6 @@ static void *mem_pool_alloc(struct mem_cache *cache, struct mem_pool *pool)
 
 		pool->bitmask[word] |= (1ul << bit);
 		--pool->free;
-
-		unlock(thread);
 		return (void *)(addr + pos * cache->obj_size);
 	}
 	BUG("Failed to find free slot in mem_pool")
@@ -236,9 +234,6 @@ static void *mem_pool_alloc(struct mem_cache *cache, struct mem_pool *pool)
 static void mem_pool_free(struct mem_cache *cache, struct mem_pool *pool,
 			void *ptr)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
 	const uintptr_t offs = (uintptr_t)ptr - (uintptr_t)pool->data;
 	const size_t pos = offs / cache->obj_size;
 
@@ -253,14 +248,11 @@ static void mem_pool_free(struct mem_cache *cache, struct mem_pool *pool,
 	++pool->free;
 
 	BUG_ON(pool->free > cache->obj_count);
-	unlock(thread);
 }
 
 void *mem_cache_alloc(struct mem_cache *cache)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
+	lock(&cache->mutex);
 	if (!list_empty(&cache->partial_pools)) {
 		struct list_head *ptr = list_first(&cache->partial_pools);
 		struct mem_pool *pool = LIST_ENTRY(ptr, struct mem_pool, ll);
@@ -271,7 +263,7 @@ void *mem_cache_alloc(struct mem_cache *cache)
 			list_del(&pool->ll);
 			list_add(&pool->ll, &cache->busy_pools);
 		}
-		unlock(thread);
+		unlock(&cache->mutex);
 		return data;
 	}
 
@@ -285,29 +277,27 @@ void *mem_cache_alloc(struct mem_cache *cache)
 			list_del(&pool->ll);
 			list_add(&pool->ll, &cache->partial_pools);
 		}
-		unlock(thread);
+		unlock(&cache->mutex);
 		return data;
 	}
 
 	struct mem_pool *pool = mem_pool_create(cache);
 
 	if (!pool) {
-		unlock(thread);
+		unlock(&cache->mutex);
 		return 0;
 	}
 
 	void *data = mem_pool_alloc(cache, pool);
 
 	list_add(&pool->ll, &cache->partial_pools);
-	unlock(thread);
+	unlock(&cache->mutex);
 	return data;
 }
 
 void mem_cache_free(struct mem_cache *cache, void *ptr)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
+	lock(&cache->mutex);
 	const size_t pool_size = (size_t)1 << (cache->pool_order + PAGE_SHIFT);
 	const uintptr_t addr = align_down((uintptr_t)ptr, pool_size);
 	struct mem_pool *pool = (struct mem_pool *)(addr + cache->meta_offs);
@@ -323,7 +313,7 @@ void mem_cache_free(struct mem_cache *cache, void *ptr)
 		list_del(&pool->ll);
 		list_add(&pool->ll, &cache->free_pools);
 	}
-	unlock(thread);
+	unlock(&cache->mutex);
 }
 
 
@@ -358,16 +348,12 @@ static int mem_order_calculate(size_t size)
 
 void mem_alloc_setup(void)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
 	for (int i = 0; i != MEM_POOLS; ++i) {
 		const size_t size = mem_pool_size[i];
 		const size_t align = mem_pool_size[0];
 
 		mem_cache_setup(&mem_pool[i], size, align);
 	}
-	unlock(thread);
 }
 
 void mem_alloc_shrink(void)
@@ -378,46 +364,32 @@ void mem_alloc_shrink(void)
 
 void *mem_alloc(size_t size)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
 	struct mem_cache *cache = mem_pool_lookup(size);
 
-	if (cache) {
-		unlock(thread);
+	if (cache)
 		return mem_cache_alloc(cache);
-	}
 
 	const int order = mem_order_calculate(size);
 	struct page *page = __page_alloc(order);
 
-	if (!page) {
-		unlock(thread);
+	if (!page)
 		return 0;
-	}
 
 	page_clear_bit(page, PAGE_CACHE_BIT);
 	page->u.order = order;
 
-	unlock(thread);
 	return va(page_addr(page));
 }
 
 void mem_free(void *ptr)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
-	if (!ptr) {
-		unlock(thread);	
+	if (!ptr)
 		return;
-	}
 
 	struct page *page = addr_page(pa(ptr) & ~(uintptr_t)PAGE_MASK);
 
 	if (page_test_bit(page, PAGE_CACHE_BIT)) {
 		mem_cache_free(page->u.cache, ptr);
-		unlock(thread);
 		return;
 	}
 
@@ -427,18 +399,12 @@ void mem_free(void *ptr)
 	page_clear_bit(page, PAGE_CACHE_BIT);
 	page->u.order = 0;
 	page_free((~mask & pa(ptr)), order);
-	unlock(thread);
 }
 
 void *mem_realloc(void *ptr, size_t size)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-	
-	if (!ptr) {
-		unlock(thread);
+	if (!ptr)
 		return mem_alloc(size);
-	}
 
 	struct page *page = addr_page(pa(ptr) & ~(uintptr_t)PAGE_MASK);
 	size_t old_size;
@@ -447,30 +413,22 @@ void *mem_realloc(void *ptr, size_t size)
 		struct mem_cache *cache = page->u.cache;
 
 		old_size = cache->obj_size;
-		if (old_size >= size) {
-			unlock(thread);
+		if (old_size >= size)
 			return ptr;
-		}
 	} else {
 		const int order = page->u.order;
 
 		old_size = (size_t)1 << (PAGE_SHIFT + order);
-		if (old_size >= size) {
-			unlock(thread);
+		if (old_size >= size)
 			return ptr;
-		}
 	}
 
 	void *new = mem_alloc(size);
 
-	if (!new) {
-		unlock(thread);
+	if (!new)
 		return 0;
-	}
 
 	memcpy(new, ptr, old_size);
 	mem_free(ptr);
-
-	unlock(thread);
 	return new;
 }

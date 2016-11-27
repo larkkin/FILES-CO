@@ -2,6 +2,7 @@
 #include <string.h>
 #include <balloc.h>
 #include <debug.h>
+#include <mutex_cas.h>
 
 #define PAGE_FREE_OFFS	8
 #define PAGE_FREE_MASK	(1ul << PAGE_FREE_OFFS)
@@ -9,6 +10,15 @@
 #define PAGE_USER_OFFS	16
 
 struct list_head page_alloc_zones;
+
+static spinlock_t page_mutex;
+
+void page_lock() {
+	lock(&page_mutex);
+}
+void page_unlock() {
+	unlock(&page_mutex);
+}
 
 static inline int page_order(const struct page *page)
 {
@@ -199,9 +209,7 @@ static void page_alloc_zone_dump(const struct page_alloc_zone *zone)
 
 void page_alloc_setup(void)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
+	page_lock();
 	struct rb_node *ptr = rb_leftmost(&memory_map);
 
 	list_init(&page_alloc_zones);
@@ -230,7 +238,7 @@ void page_alloc_setup(void)
 
 		page_alloc_zone_dump(zone);
 	}
-	unlock(thread);
+	page_unlock();
 }
 
 static struct page *page_alloc_zone(struct page_alloc_zone *zone, int order)
@@ -267,11 +275,9 @@ static struct page *page_alloc_zone(struct page_alloc_zone *zone, int order)
 
 struct page *__page_alloc(int order)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
+	page_lock();
 	if (order > MAX_ORDER) {
-		unlock(thread);
+		page_unlock();
 		return 0;
 	}
 
@@ -284,22 +290,19 @@ struct page *__page_alloc(int order)
 		struct page *page = page_alloc_zone(zone, order);
 
 		if (page) {
-			unlock(thread);
+			page_unlock();
 			return page;
 		}
 	}
-
-	unlock(thread);
+	page_unlock();
 	return 0;
 }
 
 uintptr_t page_alloc(int order)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
+	page_lock();
 	if (order > MAX_ORDER) {
-		unlock(thread);
+		page_unlock();
 		return 0;
 	}
 
@@ -316,21 +319,17 @@ uintptr_t page_alloc(int order)
 
 		const uintptr_t index = zone->begin + (page - zone->pages);
 
-
-		unlock(thread);
+		page_unlock();
 		return index << PAGE_SHIFT;
 	}
 
-	unlock(thread);
+	page_unlock();
 	return 0;
 }
 
 static void page_free_zone(struct page_alloc_zone *zone, struct page *page,
 			int order)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
 	uintptr_t idx = zone->begin + (page - zone->pages);
 
 	BUG_ON(idx & ((1ull << order) - 1));
@@ -359,17 +358,13 @@ static void page_free_zone(struct page_alloc_zone *zone, struct page *page,
 
 	page_set_order(page, order);
 	page_set_free(page);
-
-	unlock(thread);
 }
 
 void page_free(uintptr_t addr, int order)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
+	page_lock();
 	if (!addr) {
-		unlock(thread);
+		page_unlock();
 		return;
 	}
 
@@ -381,15 +376,20 @@ void page_free(uintptr_t addr, int order)
 	struct page *page = &zone->pages[idx - zone->begin];
 
 	page_free_zone(zone, page, order);
-	unlock(thread);
+	page_unlock();
 }
 
 void __page_free(struct page *page, int order)
 {
-	if (!page)
+	page_lock();
+	if (!page) {
+		page_unlock();
 		return;
+	}
+		
 
 	struct page_alloc_zone *zone = page_zone(page);
 
 	page_free_zone(zone, page, order);
+	page_unlock();
 }

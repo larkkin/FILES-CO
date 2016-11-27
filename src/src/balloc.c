@@ -1,8 +1,7 @@
 #include <balloc.h>
 #include <memory.h>
 #include <debug.h>
-#include <mutex_bakery.h>
-
+#include <mutex_cas.h>
 
 struct mboot_info {
 	uint32_t flags;
@@ -27,7 +26,7 @@ static struct list_head balloc_free_list;
 struct rb_tree free_ranges;
 struct rb_tree memory_map;
 
-static mutex_t mutex;
+static spinlock_t b_mutex;
 
 static struct memory_node *balloc_alloc_node(void)
 {
@@ -38,6 +37,13 @@ static struct memory_node *balloc_alloc_node(void)
 
 	list_del(node);
 	return LL2MEMORY_NODE(node);
+}
+
+void b_lock() {
+	lock(&b_mutex);
+}
+void b_unlock() {
+	unlock(&b_mutex);
 }
 
 static void balloc_free_node(struct memory_node *node)
@@ -122,6 +128,7 @@ static void __balloc_remove_range(struct rb_tree *tree,
 uintptr_t __balloc_alloc(size_t size, uintptr_t align,
 			uintptr_t from, uintptr_t to)
 {
+	b_lock();
 	struct rb_tree *tree = &free_ranges;
 	struct rb_node *link = tree->root;
 	struct memory_node *ptr = 0;
@@ -156,7 +163,7 @@ uintptr_t __balloc_alloc(size_t size, uintptr_t align,
 
 		ptr = RB2MEMORY_NODE(rb_next(&ptr->link.rb));
 	}
-
+	b_unlock();
 	return to;
 }
 
@@ -165,24 +172,20 @@ uintptr_t balloc_alloc(size_t size, uintptr_t from, uintptr_t to)
 	/* The only situation when we would like a larger alignment is
 	 * when we allocate page for a page table, in that case we would
 	 * need PAGE_SIZE alignment, IOW it's quite reasonable default. */
-	int thread = get_thread_num();
-	lock(thread, mutex);
 	uintptr_t align = 64;
 
 	if (size <= 32) align = 32;
 	if (size <= 16) align = 16;
 	if (size <= 8)  align = 8;
 
-	unlock(thread);
 	return __balloc_alloc(size, align, from, to);
 }
 
 void balloc_free(uintptr_t begin, uintptr_t end)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
+	b_lock();
 	__balloc_add_range(&free_ranges, begin, end);
-	unlock(thread);
+	b_unlock();
 }
 
 
@@ -257,8 +260,8 @@ static void __balloc_dump_ranges(const struct rb_tree *tree)
 	}
 }
 
-static void balloc_dump_ranges(void) // assume that mutex has already been locked by balloc_setup
-{ 
+static void balloc_dump_ranges(void)
+{
 	printf("known memory ranges:\n");
 	__balloc_dump_ranges(&memory_map);
 	printf("free memory ranges:\n");
@@ -267,21 +270,16 @@ static void balloc_dump_ranges(void) // assume that mutex has already been locke
 
 uintptr_t balloc_memory(void)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
 	const struct memory_node *node =
 				RB2MEMORY_NODE(rb_rightmost(&memory_map));
-
-	unlock(thread);
 	return node->end;
 }
 
 void balloc_setup(const struct mboot_info *info)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
+	b_lock();
 	balloc_setup_nodes();
 	balloc_parse_mmap(info);
 	balloc_dump_ranges();
-	unlock(thread, mutex);
+	b_unlock();
 }

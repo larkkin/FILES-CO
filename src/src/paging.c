@@ -5,9 +5,7 @@
 #include <balloc.h>
 #include <debug.h>
 #include <alloc.h>
-#include <mutex_bakery.h>
 
-static mutex_t mutex;
 
 struct page_pool {
 	uintptr_t (*get_page)(struct page_pool *);
@@ -195,9 +193,6 @@ static uintptr_t paging_setup_get_page(struct page_pool *pool)
 
 void paging_setup(void)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
-
 	const uintptr_t phys_mem_limit = balloc_memory() & ~PAGE_MASK;
 	const uintptr_t mem_size = phys_mem_limit < MAX_PMEM_SIZE
 				? phys_mem_limit : MAX_PMEM_SIZE;
@@ -215,8 +210,6 @@ void paging_setup(void)
 	/* Not used yet, so we need to shut up compiler. */
 	(void) pool_put_page;
 	(void) pt_count_pages;
-
-	unlock(thread);
 }
 
 
@@ -402,8 +395,6 @@ static uintptr_t kmap_setup_get_page(struct page_pool *pool)
 
 void kmap_setup(void)
 {
-	int thread = get_thread_num();
-	lock(thread, mutex);
 	static const size_t size = sizeof(struct kmap_range);
 
 	struct page_pool pool = { &kmap_setup_get_page, 0 };
@@ -417,6 +408,4 @@ void kmap_setup(void)
 	for (int i = 0; i != KMAP_ORDERS; ++i)
 		list_init(&kmap_free_ranges[i]);
 	kmap_free_range(kmap_ranges, KMAP_PAGES);
-
-	unlock(thread);
 }

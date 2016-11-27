@@ -7,6 +7,7 @@
 #include <print.h>
 #include <ints.h>
 #include <time.h>
+#include <mutex_cas.h>
 
 static void qemu_gdb_hang(void)
 {
@@ -135,6 +136,8 @@ void main(void *bootstrap_info)
 {
 	qemu_gdb_hang();
 
+	spinlock_t main_mutex;
+	lock(&main_mutex);
 	serial_setup();
 	ints_setup();
 	time_setup();
@@ -144,6 +147,7 @@ void main(void *bootstrap_info)
 	mem_alloc_setup();
 	kmap_setup();
 	enable_ints();
+	unlock(&main_mutex);
 
 	printf("Tests Begin\n");
 	test_buddy();
