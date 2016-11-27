@@ -144,13 +144,11 @@ static void mem_pool_destroy(struct mem_cache *cache, struct mem_pool *pool)
 
 void mem_cache_setup(struct mem_cache *cache, size_t size, size_t align)
 {
-	lock(&cache->mutex);
 	mem_cache_layout_setup(cache, size, align);
 
 	list_init(&cache->free_pools);
 	list_init(&cache->partial_pools);
 	list_init(&cache->busy_pools);
-	unlock(&cache->mutex);
 }
 
 void mem_cache_shrink(struct mem_cache *cache)
