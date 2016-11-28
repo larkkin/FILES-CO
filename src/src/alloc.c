@@ -149,6 +149,7 @@ void mem_cache_setup(struct mem_cache *cache, size_t size, size_t align)
 	list_init(&cache->free_pools);
 	list_init(&cache->partial_pools);
 	list_init(&cache->busy_pools);
+	cache->mutex.locked = LOCKED;
 }
 
 void mem_cache_shrink(struct mem_cache *cache)
