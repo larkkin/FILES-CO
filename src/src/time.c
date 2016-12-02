@@ -7,7 +7,6 @@
 #define PIT_CMD		0x43
 #define PIT_CH0_DATA	0x40
 #define PIT_FREQ	1193180ul
-#define PIT_IRQ		0
 
 /*
  * Timer/Counter Control Register Format:
@@ -21,8 +20,7 @@
 
 #define PIT_LO		1
 #define PIT_HI		2
-// #define PIT_RATE	2
-#define PIT_RATE	0 // нам нужен первый режим работы, не периодический
+#define PIT_RATE	2
 
 
 static unsigned long pit_divisor(unsigned long freq)
@@ -33,7 +31,8 @@ static unsigned long pit_divisor(unsigned long freq)
 static void pit_set_frequency(unsigned long freq)
 {
 	const unsigned long div = pit_divisor(freq);
-	const unsigned char cmd = PIT_MODE(PIT_RATE)
+	// const unsigned char cmd = PIT_MODE(PIT_RATE)
+	const unsigned char cmd = PIT_MODE(PIT_LO) // нам нужен первый режим работы, не периодический
 				| PIT_BYTES(PIT_LO | PIT_HI)
 				| PIT_CHANNEL(0);
 
@@ -44,6 +43,7 @@ static void pit_set_frequency(unsigned long freq)
 
 static void pit_handler(int irq, struct frame *frame)
 {
+	switch_current_thread();
 	(void) irq;
 	(void) frame;
 }

@@ -3,10 +3,10 @@
 
 #include <kernel.h>
 
-struct list_head {
+typedef struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
-};
+} list_head_t;
 
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 #define LIST_HEAD(name) struct list_head name = LIST_HEAD_INIT(name)

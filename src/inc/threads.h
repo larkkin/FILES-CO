@@ -2,6 +2,13 @@
 #define __TASK_H__
 
 #include <stdint.h>
+#include <list.h>
+
+typedef enum
+{
+    WORKING,
+    TERMINATED
+} thread_state;
 
 typedef struct context
 {
@@ -17,15 +24,25 @@ typedef struct context
 } context_t;
 
 typedef struct Thread {
+    list_head_t node_;
     context_t* context_;
-    struct Thread* next_;
+    uint64_t stack_start_ptr_;
+    uint64_t stack_end_ptr_;
+    thread_state state_;
 } Thread_t;
  
-// extern void threads_init();
 
-extern void create_thread(Thread_t* thread, void (*func)(), uint64_t stack_ptr);
- 
-extern void schedule(); 
+void main_thread_setup();
+
+extern void init_thread(Thread_t* thread, 
+                 void (*func)(void *), 
+                 void *args);
+
+extern void start_thread(Thread_t* thread);
+
+extern void terminate_thread(Thread_t * thread);
+
+extern void switch_current_thread(); 
 
 extern void switch_threads(context_t **old_c, context_t *new_c); 
  
