@@ -2,6 +2,7 @@
 #include <ints.h>
 #include <ioport.h>
 #include <print.h>
+#include <threads.h>
 
 #define PIT_CMD		0x43
 #define PIT_CH0_DATA	0x40
@@ -20,7 +21,9 @@
 
 #define PIT_LO		1
 #define PIT_HI		2
-#define PIT_RATE	2
+// #define PIT_RATE	2
+#define PIT_RATE	0 // нам нужен первый режим работы, не периодический
+
 
 static unsigned long pit_divisor(unsigned long freq)
 {
