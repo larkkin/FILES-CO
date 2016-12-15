@@ -267,9 +267,14 @@ static void test_file_system(void) {
 	write(file, 0, str, 5);
 	write(file, 1, str2, 2);
 	char strgot[5];
-	read(file, 0, strgot, 5);
+	uint64_t bytes_count = read(file, 0, strgot, 5);
 	printf(strgot);
-	printf("\n");
+	printf("\nbytes read: %d\n", bytes_count);
+
+	bytes_count = read(file, 0, strgot, 15);
+	printf(strgot);
+	printf("\nbytes read: %d\n", bytes_count);
+
 	close(file);
 
 }
@@ -283,12 +288,14 @@ static void check_cpio(void) {
 	names = readdir("/initramfs/tratata");
 	print_dir_names_list(names);
 
-	char cpp[14];
-	cpp[13] = '\0';
+	char cpp[15];
+	cpp[14] = '\0';
 	fs_node_t* file = open("/initramfs/pumpum/2.cpp");
-	read(file, 0, cpp, 13);
+	printf("size: %d\n", file->size_);
+	uint64_t bytes_count = read(file, 0, cpp, 25);
 	close(file);
 	printf(cpp);
+	printf("\nbytes read: %d\n", bytes_count);
 	// char* str = "abcd";
 	// write("/data/input", 0, (uint64_t) str, 5);
 	// char strgot[5];

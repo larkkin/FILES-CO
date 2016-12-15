@@ -47,7 +47,7 @@ void mkdir(char* dir_name);
 void write(fs_node_t* node_ptr, uint64_t offset, void* data_begin, uint64_t data_size);
 // void write_to_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data_begin, uint64_t data_size);
 
-void read(fs_node_t* node_ptr, uint64_t offset, void* data_begin, uint64_t data_size);
+uint64_t read(fs_node_t* node_ptr, uint64_t offset, void* data_begin, uint64_t data_size);
 // void read_from_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data_begin, uint64_t data_size);
 
 void init_file_system(int blocks_num);

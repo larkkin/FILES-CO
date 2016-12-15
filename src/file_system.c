@@ -271,32 +271,40 @@ void write(fs_node_t* node_ptr, uint64_t offset, void* data_begin, uint64_t data
 }
 
 
-void read_from_block(fs_descriptor_list_t* block, uint64_t offset, void* data_begin, uint64_t data_size) {
-	BUG_ON(block == NULL);
+uint64_t read_from_block(fs_descriptor_list_t* block, uint64_t offset, void* data_begin, uint64_t data_size,
+						 uint64_t file_size_left) {
+	if (block == NULL) {
+		return 0;
+	}
+
 	if (offset > FS_BLOCK_SIZE) {
-		read_from_block(block->next_, offset - FS_BLOCK_SIZE, data_begin, data_size);
+		return read_from_block(block->next_, offset - FS_BLOCK_SIZE, data_begin, data_size, file_size_left - FS_BLOCK_SIZE);
 	}	
 	uint8_t* block_byte = (uint8_t*) block->data_ptr_ + offset;
 	uint8_t* byte;
 	for (byte = (uint8_t*) data_begin; 
 		 byte < (uint8_t*) (((uint64_t) data_begin) + data_size) && 
-		 	byte < ((uint8_t*) data_begin) + FS_BLOCK_SIZE - offset;
+		 	byte < ((uint8_t*) data_begin) + FS_BLOCK_SIZE - offset &&
+		 	byte < ((uint8_t*) data_begin) + file_size_left;
 		 byte++) {
 		*byte = *block_byte;
 		block_byte++;
 	}
 	if ((uint64_t) byte < ((uint64_t) data_begin) + data_size) {
-		read_from_block(block->next_, 0, byte, data_size - FS_BLOCK_SIZE);
+		return FS_BLOCK_SIZE + read_from_block(block->next_, 0, byte, data_size - FS_BLOCK_SIZE, file_size_left - FS_BLOCK_SIZE);
+	}
+	else {
+		return file_size_left;
 	}
 }
 
-void read(fs_node_t* node_ptr, uint64_t offset, void* data_begin, uint64_t data_size) {
+uint64_t read(fs_node_t* node_ptr, uint64_t offset, void* data_begin, uint64_t data_size) {
 	lock();
 	BUG_ON(!node_ptr->opened_);
-	BUG_ON(node_ptr->size_ < offset + data_size);
 	fs_descriptor_list_t* current_block = node_ptr->list_head_;
-	read_from_block(current_block, offset, data_begin, data_size);
+	uint64_t res = read_from_block(current_block, offset, data_begin, data_size, node_ptr->size_);
 	unlock();
+	return res;
 }
 
 void init_file_system(int blocks_num) {
