@@ -292,7 +292,7 @@ static void check_cpio(void) {
 	cpp[14] = '\0';
 	fs_node_t* file = open("/initramfs/pumpum/2.cpp");
 	printf("size: %d\n", file->size_);
-	uint64_t bytes_count = read(file, 0, cpp, 25);
+	uint64_t bytes_count = read(file, 0, cpp, 25000000);
 	close(file);
 	printf(cpp);
 	printf("\nbytes read: %d\n", bytes_count);
