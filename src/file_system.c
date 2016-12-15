@@ -76,7 +76,6 @@ void init_fs_node(fs_node_t* node_ptr, char* name, node_t type) {
 		node_ptr->children_ = NULL;
 		node_ptr->list_head_ = NULL;
 	}
-	node_ptr->blocks_num_ = 0;
 	node_ptr->children_num_ = 0;
 	node_ptr->opened_ = 0;
 }
@@ -187,21 +186,16 @@ fs_node_t* find_node(char* name, node_t type) {
 	return &current_node_ptr->children_[current_node_ptr->children_num_ - 1];
 }
 
-int is_opened(char* file_name) {
-	lock();
-	return find_node(file_name, FILE)->opened_;
-	unlock();
-}
-void open(char* file_name) {
+fs_node_t* open(char* file_name) {
 	lock();
 	fs_node_t* node_ptr = find_node(file_name, FILE);
 	BUG_ON(node_ptr->opened_);
 	node_ptr->opened_ = 1;
 	unlock();
+	return node_ptr;
 }
-void close(char* file_name) {
+void close(fs_node_t* node_ptr) {
 	lock();
-	fs_node_t* node_ptr = find_node(file_name, FILE);
 	node_ptr->opened_ = 0;
 	unlock();
 }
@@ -260,9 +254,8 @@ void write_to_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data_
 	}
 }
 
-void write(char* name, uint64_t offset, uint64_t data_begin, uint64_t data_size) {
+void write(fs_node_t* node_ptr, uint64_t offset, uint64_t data_begin, uint64_t data_size) {
 	lock();
-	fs_node_t* node_ptr = find_node(name, FILE);
 	BUG_ON(!node_ptr->opened_);
 	fs_descriptor_list_t* current_block = node_ptr->list_head_;
 	if (current_block == NULL) {
@@ -275,6 +268,7 @@ void write(char* name, uint64_t offset, uint64_t data_begin, uint64_t data_size)
 
 
 void read_from_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data_begin, uint64_t data_size) {
+	BUG_ON(block == NULL);
 	if (offset > FS_BLOCK_SIZE) {
 		read_from_block(block->next_, offset - FS_BLOCK_SIZE, data_begin, data_size);
 	}	
@@ -292,14 +286,11 @@ void read_from_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data
 	}
 }
 
-void read(char* name, uint64_t offset, uint64_t data_begin, uint64_t data_size) {
+void read(fs_node_t* node_ptr, uint64_t offset, uint64_t data_begin, uint64_t data_size) {
 	lock();
-	fs_node_t* node_ptr = find_node(name, FILE);
 	BUG_ON(!node_ptr->opened_);
 
 	fs_descriptor_list_t* current_block = node_ptr->list_head_;
-	BUG_ON(current_block == NULL);
-	BUG_ON(node_ptr->blocks_num_ * FS_BLOCK_SIZE >= offset + data_size);
 	read_from_block(current_block, offset, data_begin, data_size);
 	unlock();
 }

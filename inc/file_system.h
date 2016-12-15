@@ -32,23 +32,21 @@ typedef struct fs_node {
 	struct fs_node* children_;
 	uint64_t children_num_;
 	fs_descriptor_list_t* list_head_;
-	uint64_t blocks_num_;
 
 	int opened_;
 
 } fs_node_t;
 
 
-int is_opened(char* file_name);
-void open(char* file_name);
-void close(char* file_name);
+fs_node_t* open(char* file_name);
+void close(fs_node_t* node_ptr);
 void mkdir(char* dir_name);
 
 
-void write(char* name, uint64_t offset, uint64_t data_begin, uint64_t data_size);
+void write(fs_node_t* node_ptr, uint64_t offset, uint64_t data_begin, uint64_t data_size);
 // void write_to_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data_begin, uint64_t data_size);
 
-void read(char* name, uint64_t offset, uint64_t data_begin, uint64_t data_size);
+void read(fs_node_t* node_ptr, uint64_t offset, uint64_t data_begin, uint64_t data_size);
 // void read_from_block(fs_descriptor_list_t* block, uint64_t offset, uint64_t data_begin, uint64_t data_size);
 
 void init_file_system(int blocks_num);

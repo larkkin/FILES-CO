@@ -144,9 +144,9 @@ uint64_t handle_one_cpio_object(uint64_t header_start) {
 	uint64_t data_start = (uint64_t) va(phys_data_start);
 	if (S_ISREG(type)) {
 		// data_start = (data_start + 3) / 4 * 4; // 4b-align
-		open(path);
-		write(path, 0, data_start, file_size);
-		close(path);
+		fs_node_t* file = open(path);
+		write(file, 0, data_start, file_size);
+		close(file);
 		printf(path);
 		printf("      -- file\n");
 		mem_free(path);

@@ -259,16 +259,16 @@ static void qemu_gdb_hang(void)
 
 static void test_file_system(void) {
 	mkdir("/data");
-	open("/data/input");
+	fs_node_t* file = open("/data/input");
 	dir_names_list_t* names = readdir("/data");
 	print_dir_names_list(names);
 	char* str = "abcd";
-	write("/data/input", 0, (uint64_t) str, 5);
+	write(file, 0, (uint64_t) str, 5);
 	char strgot[5];
-	read("/data/input", 0, (uint64_t) strgot, 5);
+	read(file, 0, (uint64_t) strgot, 5);
 	printf(strgot);
 	printf("\n");
-	close("/data/input");
+	close(file);
 
 }
 
@@ -283,9 +283,9 @@ static void check_cpio(void) {
 
 	char cpp[14];
 	cpp[13] = '\0';
-	open("/initramfs/pumpum/2.cpp");
-	read("/initramfs/pumpum/2.cpp", 0, (uint64_t) cpp, 13);
-	close("/initramfs/pumpum/2.cpp");
+	fs_node_t* file = open("/initramfs/pumpum/2.cpp");
+	read(file, 0, (uint64_t) cpp, 13);
+	close(file);
 	printf(cpp);
 	// char* str = "abcd";
 	// write("/data/input", 0, (uint64_t) str, 5);
