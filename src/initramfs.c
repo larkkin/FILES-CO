@@ -141,7 +141,7 @@ uint64_t handle_one_cpio_object(uint64_t header_start) {
 	uint64_t phys_data_start = header_start + sizeof(cpio_header_t) + name_size;
 	phys_data_start = (phys_data_start + 3) / 4 * 4; // 4b-align
 
-	uint64_t data_start = (uint64_t) va(phys_data_start);
+	void* data_start = (void*) va(phys_data_start);
 	if (S_ISREG(type)) {
 		// data_start = (data_start + 3) / 4 * 4; // 4b-align
 		fs_node_t* file = open(path);
